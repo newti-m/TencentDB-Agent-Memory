@@ -21,6 +21,25 @@ def api(path, body, user_id):
         raise RuntimeError(f"{path}: {d}")
     return d.get("data", d)
 
+
+def register_asset(wiki_id, name, team, user):
+    """Register the wiki as an llm_wiki asset in Memory Core meta so the
+    Panel can resolve it (direct Knowledge-API creates skip this)."""
+    key = open(os.path.join(HERE, ".hmelab-key")).read().strip()
+    body = {"asset_id": wiki_id, "team_id": team, "asset_type": "llm_wiki",
+            "name": name, "owner_user_id": user, "source_type": "manual",
+            "visibility": "team"}
+    req = urllib.request.Request("http://localhost:8420/v3/meta/asset/create",
+        json.dumps(body).encode(),
+        {"Content-Type": "application/json", "x-tdai-service-id": "default",
+         "x-tdai-user-key": key})
+    try:
+        with urllib.request.urlopen(req, timeout=30) as r:
+            d = json.load(r)
+        print(f"asset registered: {d.get('code')}")
+    except urllib.error.HTTPError as e:
+        print(f"asset register skipped ({e.code}: likely already exists)")
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("folders", nargs="+")
@@ -34,6 +53,7 @@ def main():
     wiki = api("/wiki/create", {"team_id": team, "user_id": user, "name": args.wiki}, user)
     wiki_id = wiki["wiki_id"]
     print(f"wiki {args.wiki} -> {wiki_id} (status={wiki.get('status')})")
+    register_asset(wiki_id, args.wiki, team, user)
 
     files, skipped = [], 0
     for folder in args.folders:
