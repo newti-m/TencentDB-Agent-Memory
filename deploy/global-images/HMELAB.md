@@ -76,3 +76,23 @@ code_* tools (needs node >= 22).
   if that changes.
 - `MEMORY_CORE_GATEWAY_API_KEY` must stay EMPTY in this release or the
   proxy's session-init breaks (documented upstream).
+
+## Bulk ingest postmortem (2026-08-14/15)
+
+The overnight bulk pass reported ready but only 13/396 sources extracted.
+Root cause: **Ollama KV-cache/context corruption** at 262k context with
+checkpoint reuse — responses regurgitated content from earlier requests
+(wrong-document answers), so extraction plans and FILE blocks were garbage.
+Confounders chased on the way: qwen3.6's thinking/content split is unstable
+(FILE blocks can land in the hidden reasoning field), disabling reasoning
+makes the model skip the FILE protocol, and the hub never sets temperature
+(model default 1.0).
+
+Fixes now in place:
+- `OLLAMA_CONTEXT_LENGTH=32768` (systemd drop-in `ollama.service.d/context.conf`)
+  + Ollama restart to flush the poisoned cache.
+- `llm-shim.py` (systemd unit `tdai-llm-shim.service`, 172.17.0.1:11439):
+  pins temperature 0.6, merges reasoning back into content when FILE blocks
+  land there, repairs near-miss `FILE path=` markers, logs per-call metadata
+  to /var/log/tdai-llm-shim.jsonl. MEMORY_LLM_BASE_URL points at the shim.
+- Re-running `wiki/ingest` retries failed sources (incremental).
