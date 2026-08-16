@@ -69,6 +69,45 @@ MCP alternative (knowledge only): `MemoryKnowledge/bin/mcp.mjs` with
 `KNOWLEDGE_API_URL=http://evo-x2:8424/v3` exposes wiki_search / wiki_read /
 code_* tools (needs node >= 22).
 
+## Hermes memory provider (memory_tencentdb)
+
+Hermes on evo-x2 uses the `memory_tencentdb` provider to capture every
+conversation into the same L0→L1→L2→L3 pipeline as Claude, sharing the
+`hmelab` team/agent/user namespace (ids in `.hmelab-ids`).
+
+- Provider source: `MemoryCore/hermes-plugin/memory/memory_tencentdb/`,
+  symlinked into `~/.hermes/hermes-agent/plugins/memory/memory_tencentdb`.
+- `~/.hermes/config.yaml`: `memory.provider: memory_tencentdb`.
+- `~/.hermes/.env` (and the `hermes_auth` Ansible template) set:
+  `MEMORY_TENCENTDB_GATEWAY_HOST=127.0.0.1`, `_PORT=8420`, and the tenancy
+  ids `MEMORY_TENCENTDB_{TEAM,AGENT,USER}_ID` to the hmelab ids.
+- The provider connects to the **existing Docker gateway on 8420** (no
+  sidecar spawned). It exposes 3 tools: `memory_tencentdb_memory_search`
+  (L1), `memory_tencentdb_conversation_search` (L0), and
+  `memory_tencentdb_read_scene` (L2).
+
+### Embedding setup (required for semantic recall)
+
+The gateway's `memory.embedding` must point at a real embedding endpoint or
+all memories store zero-dimension vectors and vector search finds nothing
+(FTS5 only matches exact terms). Set these in `deploy/global-images/.env`
+(gitignored) and re-run `./start-memory-core.sh`:
+
+```bash
+MEMORY_EMBEDDING_PROVIDER=openai
+MEMORY_EMBEDDING_ENABLED=true
+MEMORY_EMBEDDING_BASE_URL=http://172.17.0.1:11434/v1   # host Ollama
+MEMORY_EMBEDDING_API_KEY=ollama-local
+MEMORY_EMBEDDING_MODEL=nomic-embed-text                 # 768 dims
+MEMORY_EMBEDDING_DIMENSIONS=768
+```
+
+`start-memory-core.sh` renders these into `tdai-gateway.yaml` (the
+`embedding:` block). Verify with `curl localhost:8420/health` →
+`embeddingService: true`. The data volume is preserved across container
+recreation, so existing L0 conversations are kept; only new captures get
+real vectors.
+
 ## Security caveats
 
 - Ports 8125/8424/8420/8096 are published on 0.0.0.0 and **ufw is inactive**
