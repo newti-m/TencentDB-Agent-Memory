@@ -614,6 +614,13 @@ class MemoryTencentdbProvider(MemoryProvider):
         if not self._ensure_alive_for_request() or not self._client:
             return ""
 
+        # The Gateway's /v3/atomic/search rejects queries > 2048 chars. The
+        # full user message (with skill scaffolding) routinely exceeds this,
+        # so truncate to a safe search window before sending.
+        _MAX_QUERY_CHARS = 2000
+        if len(query) > _MAX_QUERY_CHARS:
+            query = query[:_MAX_QUERY_CHARS]
+
         effective_session = session_id or self._session_id
         try:
             # Parallel fetch: L1 memories + L3 core + L2 scene navigation
