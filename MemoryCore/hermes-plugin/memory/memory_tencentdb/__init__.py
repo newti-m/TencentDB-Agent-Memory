@@ -896,7 +896,10 @@ class MemoryTencentdbProvider(MemoryProvider):
                     user_id=self._user_id,
                 )
                 self._record_success()
-                items = result.get("data", {}).get("items", [])
+                # The Gateway returns conversation hits under `data.messages`
+                # (not `data.items` like atomic/search). Read both defensively.
+                data = result.get("data", {})
+                items = data.get("messages") or data.get("items") or []
                 if not items:
                     return "No conversations found for this query."
                 lines = []
