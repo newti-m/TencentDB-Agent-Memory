@@ -99,7 +99,13 @@ memory:
     timeoutMs: 5000
   storeBackend: sqlite
   embedding:
-    provider: none
+    provider: ${MEMORY_EMBEDDING_PROVIDER:-none}
+    enabled: ${MEMORY_EMBEDDING_ENABLED:-false}
+    baseUrl: "${MEMORY_EMBEDDING_BASE_URL:-}"
+    apiKey: "${MEMORY_EMBEDDING_API_KEY:-}"
+    model: "${MEMORY_EMBEDDING_MODEL:-}"
+    dimensions: ${MEMORY_EMBEDDING_DIMENSIONS:-768}
+    sendDimensions: false
 
 # ── Skill 模块 ──
 skill:
