@@ -128,6 +128,20 @@ def _resolve_gateway_api_key() -> Optional[str]:
     return None
 
 
+def _resolve_tenancy_id(env_var: str, default: str) -> str:
+    """Resolve a tenancy id (team/agent/user) from the environment.
+
+    Falls back to ``default`` when the env var is unset or blank. This lets an
+    operator align Hermes's memory namespace with an existing TDAI deployment
+    (e.g. the hmelab team/agent/user ids) instead of always using "default".
+    """
+    raw = os.environ.get(env_var)
+    if raw is None:
+        return default
+    value = raw.strip()
+    return value or default
+
+
 # Candidate locations searched by _discover_gateway_cmd() when the user has not
 # set MEMORY_TENCENTDB_GATEWAY_CMD. Order matters: in-tree checkout (next to
 # this file) wins over ad-hoc clones in ``$HOME``.
@@ -537,9 +551,12 @@ class MemoryTencentdbProvider(MemoryProvider):
         All default to "default".
         """
         self._session_id = session_id
-        self._user_id = kwargs.get("user_id", _DEFAULT_USER_ID)
-        self._team_id = kwargs.get("team_id", _DEFAULT_TEAM_ID)
-        self._agent_id = kwargs.get("agent_id", _DEFAULT_AGENT_ID)
+        self._user_id = kwargs.get("user_id") or _resolve_tenancy_id(
+            "MEMORY_TENCENTDB_USER_ID", _DEFAULT_USER_ID)
+        self._team_id = kwargs.get("team_id") or _resolve_tenancy_id(
+            "MEMORY_TENCENTDB_TEAM_ID", _DEFAULT_TEAM_ID)
+        self._agent_id = kwargs.get("agent_id") or _resolve_tenancy_id(
+            "MEMORY_TENCENTDB_AGENT_ID", _DEFAULT_AGENT_ID)
 
         host = _resolve_gateway_host()
         port = _resolve_gateway_port()
