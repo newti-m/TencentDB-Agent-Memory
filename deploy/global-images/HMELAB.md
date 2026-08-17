@@ -108,6 +108,31 @@ MEMORY_EMBEDDING_DIMENSIONS=768
 recreation, so existing L0 conversations are kept; only new captures get
 real vectors.
 
+### A/B effectiveness test (2026-08-16) — and the L0 recall fix
+
+Measured TDAI's marginal token effect on top of Hermes built-in memory using
+`-z --usage-file` one-shots (provider-reported token counts, not estimates).
+Harness: `~/.hermes/scripts/ab_harness.py` (short task) and `ab_long.py` +
+`ab_followup.py` (cross-session).
+
+Results:
+- **Short self-contained task** (repo inspection, fresh session): TDAI = **+3.3%**
+  total tokens (overhead — no prior context to recall, adds recall + extraction).
+- **Cross-session follow-up** (new session asks about a prior session's repo
+  exploration): **before the L0 fix**, TDAI = +7% (recall could NOT surface the
+  prior findings — only L1's distilled "user inspected this repo"). **After the
+  L0 fix**, TDAI = **−24.9%** total tokens (recall substituted for re-exploration).
+
+Root cause fixed in `21ec879`: Hermes's prefetch only queried L1 (distilled
+persona/episodic) + L2/L3, so prior sessions' technical findings that L1
+distilled away were never surfaced. The provider now adds a parallel
+`/v3/conversation/search` (L0) call and emits hits under
+`<prior-conversations>`. To re-measure, seed TDAI with a rich exploration
+(`ab_long.py --seed-only`), then run `ab_followup.py`.
+
+Caveat: L0 recall injects raw conversation excerpts (bounded by `limit=5`); on
+very long sessions this can bloat context — tune `limit` down if needed.
+
 ## Security caveats
 
 - Ports 8125/8424/8420/8096 are published on 0.0.0.0 and **ufw is inactive**
