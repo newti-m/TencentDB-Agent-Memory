@@ -640,7 +640,7 @@ class MemoryTencentdbProvider(MemoryProvider):
 
         effective_session = session_id or self._session_id
         try:
-            # Parallel fetch: L1 memories + L3 core + L2 scene navigation
+            # Parallel fetch: L1 memories + L3 core + L2 scene navigation + L0 conversations
             results: Dict[str, Any] = {}
             errors: List[str] = []
 
@@ -674,6 +674,17 @@ class MemoryTencentdbProvider(MemoryProvider):
                 threading.Thread(
                     target=_fetch,
                     args=("l2", lambda: self._client.scenario_ls(
+                        team_id=self._team_id,
+                        agent_id=self._agent_id,
+                        user_id=self._user_id,
+                    )),
+                    daemon=True,
+                ),
+                threading.Thread(
+                    target=_fetch,
+                    args=("l0", lambda: self._client.conversation_search(
+                        query=query,
+                        limit=5,
                         team_id=self._team_id,
                         agent_id=self._agent_id,
                         user_id=self._user_id,
@@ -727,6 +738,27 @@ class MemoryTencentdbProvider(MemoryProvider):
                     "Available scenes:\n"
                     + "\n".join(lines)
                     + "\n</scene-navigation>"
+                )
+
+            # L0 raw conversation hits (the gateway returns them under
+            # data.messages). Surfacing prior-session detail that L1 may have
+            # distilled away (task findings, repo specifics) is what enables
+            # cross-session technical recall.
+            l0_data = results.get("l0", {})
+            l0_msgs = l0_data.get("data", {}).get("messages", []) or \
+                l0_data.get("data", {}).get("items", [])
+            if l0_msgs:
+                lines = []
+                for m in l0_msgs:
+                    role = m.get("role", "?")
+                    content = m.get("content", "")
+                    if content:
+                        lines.append(f"- [{role}] {content}")
+                parts.append(
+                    "<prior-conversations>\n"
+                    "Relevant prior conversation excerpts (raw):\n\n"
+                    + "\n".join(lines)
+                    + "\n</prior-conversations>"
                 )
 
             self._record_success()
