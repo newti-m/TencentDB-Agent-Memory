@@ -77,6 +77,24 @@ _WATCHDOG_SHUTDOWN_TIMEOUT_SECS = 2.0
 _DEFAULT_GATEWAY_HOST = "127.0.0.1"
 _DEFAULT_GATEWAY_PORT = 8420
 
+# The Gateway's /v3/conversation/add schema enforces per-message
+# `content: z.string().min(1).max(8192)` (see src/gateway/generated/schemas.ts).
+# A long turn (user message + skill scaffolding, or a large assistant reply)
+# routinely exceeds 8192 chars, which makes the Gateway reject the whole sync
+# with HTTP 400 "messages.0.content: Too big". Truncate each side before
+# sending so the sync survives. Keep a small safety margin (use 8192 exactly,
+# the Gateway's own max).
+_GATEWAY_MSG_CONTENT_MAX = 8192
+
+
+def _clamp_message_content(text: str) -> str:
+    """Truncate a message body to the Gateway's per-message content limit."""
+    if not text:
+        return text
+    if len(text) <= _GATEWAY_MSG_CONTENT_MAX:
+        return text
+    return text[:_GATEWAY_MSG_CONTENT_MAX]
+
 # Default tenancy IDs for v3 isolation.
 _DEFAULT_TEAM_ID = "default"
 _DEFAULT_AGENT_ID = "default"
@@ -790,8 +808,8 @@ class MemoryTencentdbProvider(MemoryProvider):
         user_ts = now.replace(microsecond=max(0, now.microsecond - 1000)).isoformat().replace("+00:00", "Z")
         assistant_ts = now.isoformat().replace("+00:00", "Z")
         messages = [
-            {"role": "user", "content": user_content, "timestamp": user_ts},
-            {"role": "assistant", "content": assistant_content, "timestamp": assistant_ts},
+            {"role": "user", "content": _clamp_message_content(user_content), "timestamp": user_ts},
+            {"role": "assistant", "content": _clamp_message_content(assistant_content), "timestamp": assistant_ts},
         ]
 
         def _sync():
