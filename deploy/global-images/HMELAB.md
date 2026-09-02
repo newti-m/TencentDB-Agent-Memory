@@ -135,9 +135,15 @@ very long sessions this can bloat context — tune `limit` down if needed.
 
 ## Security caveats
 
-- Ports 8125/8424/8420/8096 are published on 0.0.0.0 and **ufw is inactive**
-  — LAN-reachable. Knowledge API has no auth. Fleet LAN is trusted; revisit
-  if that changes.
+- Ports 8125/8424/8420/8096 are published on **127.0.0.1 (loopback only)** as
+  of `84f6996` — no longer LAN- or tailnet-reachable (the containers still
+  listen on 0.0.0.0 *inside* the Docker network, but Docker only maps them to
+  loopback on the host). Hermes consumes memory via 127.0.0.1:8420, so there
+  are no LAN consumers to break.
+- Knowledge API (8424) still has **no auth** — now mitigated by loopback-only
+  binding, but anything with host access (or a future re-exposure) reaches it
+  unauthenticated. `ufw` remains inactive; the loopback bind, not the firewall,
+  is what limits exposure. Revisit both if any of these ports are republished.
 - `MEMORY_CORE_GATEWAY_API_KEY` must stay EMPTY in this release or the
   proxy's session-init breaks (documented upstream).
 
